@@ -346,6 +346,10 @@ pub(crate) fn trace_enabled() -> bool {
 pub(crate) fn ttl_for_signature(signature: &str) -> Duration {
     if signature.starts_with("bulkReadTokenConfigs") {
         TOKEN_CONFIG_TTL
+    } else if signature.starts_with("bulkTraders") {
+        // Who may trade an account is read fresh: a revoke takes effect on
+        // the next call, not when a cached grant expires.
+        Duration::ZERO
     } else {
         DEFAULT_TTL
     }
@@ -460,6 +464,10 @@ mod tests {
             TOKEN_CONFIG_TTL
         );
         assert_eq!(ttl_for_signature("getBalance(uint64,uint32)"), DEFAULT_TTL);
+        assert_eq!(
+            ttl_for_signature("bulkTraders_5523718714(uint64)"),
+            Duration::ZERO
+        );
         assert_eq!(DEFAULT_TTL, Duration::from_secs(60));
     }
 }
