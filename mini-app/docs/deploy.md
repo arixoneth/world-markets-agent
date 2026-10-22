@@ -14,7 +14,8 @@ separately through Aomi Build and ignores this directory. Configure:
   authenticate command requests.
 - `TELEGRAM_BOT_ID` and `TELEGRAM_BOT_USERNAME` — public bot identity used for
   Mini App initData verification and chat links.
-- `AOMI_TELEGRAM_BINDING_URL` — private, bot-scoped Aomi binding capability.
+- `AOMI_TELEGRAM_WALLET_URL` — private, bot-scoped Aomi wallet lookup (a Telegram user to their agent wallet).
+- `WORLD_STORE_URL`, `WORLD_STORE_API_KEY` — World's trader store (an agent wallet to its World account).
 - Optional `WORLD_RPC_URL`, `WORLD_EXCHANGE_ADDRESS`, and `WORLD_CHAIN_ID`.
 
 Never set `WEB_DEV_TELEGRAM_USER_ID` in production.

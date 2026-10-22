@@ -56,7 +56,7 @@ export interface TenantAdapter<A = unknown> {
   scanFills?(account: A, fromBlock: bigint, toBlock: bigint): Promise<FillEvent[]>;
   /** Block to start a fresh account's fill scan from, normally the venue's deployment block. */
   fillsGenesis?: bigint;
-  /** On-chain owner of a venue account, used to vet handover registrations that arrive without a key. */
+  /** On-chain owner of a venue account: the binding for a wallet World's store maps to it. */
   accountOwner?(accountId: string): Promise<string | null>;
 }
 

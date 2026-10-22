@@ -15,6 +15,7 @@ mod reporting;
 mod rpc;
 mod size;
 mod staging;
+mod store;
 mod tool;
 
 dyn_aomi_app!(
@@ -43,6 +44,7 @@ dyn_aomi_app!(
         tool::GuardianUnwind,
         tool::AcknowledgeGuardian,
     ],
+    secrets = [store::STORE_API_KEY],
     namespaces = ["evm-core", "aomi-core"],
     skills = [
         {
@@ -286,7 +288,11 @@ mod tests {
                 "acknowledge_guardian",
             ]
         );
-        assert!(app.secrets().is_none(), "the app declares no secrets");
+        // One operator secret: World's trader store key.
+        let secrets = app.secrets().expect("the store key is declared");
+        assert_eq!(secrets.len(), 1);
+        assert_eq!(secrets[0].name, "WORLD_STORE_API_KEY");
+        assert!(secrets[0].required && !secrets[0].user_own);
         assert_eq!(
             app.namespaces(),
             Some(vec!["evm-core".to_string(), "aomi-core".to_string()])

@@ -65,6 +65,6 @@ service database.
 
 - Aomi is the only Telegram webhook owner.
 - Custom commands are configured per application, slash-only, DM-only and deterministic.
-- Aomi owns handover bindings; World receives only the settled binding needed for a read.
+- Aomi names each Telegram user's agent wallet; World's trader store names the account it may trade.
 - A shared HMAC secret authenticates Aomi command calls. Bot tokens and webhook capabilities are never forwarded.
 - A command that renders over its character budget fails; it is never trimmed.

@@ -18,9 +18,8 @@ pub(crate) struct Mandate {
     pub(crate) min_risk_adjusted_portfolio_value: AmountLimit,
     pub(crate) halt_if_eligible_for_liquidation: bool,
     pub(crate) can_withdraw: bool,
-    /// Account the mandate was issued for. Read by the app through the raw
-    /// handover attributes (`handover.mandate.account.id`) as the fallback
-    /// after `handover.account_ref`; declared here so parsing accepts it.
+    /// Account the mandate was issued for, as World's store records it; the
+    /// store's `account_id` decides, this is declared so parsing accepts it.
     #[serde(default, rename = "account")]
     pub(crate) _account: Option<MandateAccount>,
     /// Standing guidance is carried here only as an interim transport bridge.
@@ -89,6 +88,12 @@ impl Verdict {
         }
     }
 
+    /// No mandate: the account's own on-chain limits, the wallet's lane and
+    /// Pause still apply; the mandate adds none.
+    pub(crate) fn unbounded() -> Self {
+        Self::allow("No mandate is set for this account; its on-chain limits apply.")
+    }
+
     pub(crate) fn is_allow(&self) -> bool {
         self.status == "allow"
     }
@@ -116,11 +121,16 @@ fn mandate_absent(rule: &'static str) -> Verdict {
 }
 
 impl Mandate {
-    /// The mandate bound to this thread, from `handover.mandate`. There is
-    /// no fallback: without a handover mandate every verdict is
-    /// `missing_mandate` and nothing is staged.
-    pub(crate) fn bound(handover: Option<&Value>) -> Result<Self, Verdict> {
-        Self::parse(handover)
+    /// The mandate World's store holds for this trader, required: a floor
+    /// or a guardian needs one (`missing_mandate` otherwise).
+    pub(crate) fn bound(stored: Option<&Value>) -> Result<Self, Verdict> {
+        Self::parse(stored)
+    }
+
+    /// The mandate if the owner set one. A trade without one has no extra
+    /// limits; one that is set but invalid or expired still denies.
+    pub(crate) fn optional(stored: Option<&Value>) -> Result<Option<Self>, Verdict> {
+        stored.map(|value| Self::parse(Some(value))).transpose()
     }
 
     pub(crate) fn parse(value: Option<&Value>) -> Result<Self, Verdict> {
@@ -515,7 +525,7 @@ mod tests {
     }
 
     #[test]
-    fn bound_fails_closed_without_handover() {
+    fn bound_fails_closed_without_a_stored_mandate() {
         let verdict = Mandate::bound(None).unwrap_err();
         assert_eq!(verdict.rule, "missing_mandate");
         assert_eq!(verdict.detail, MANDATE_ABSENT_DETAIL);

@@ -19,7 +19,7 @@ Spot or perp: `get_world_open_orders` for the pair → `order_id` and `side` (no
 
 ## Loans
 
-Borrower loans only, one per call, gated on a bound mandate, the floor, and liquidation eligibility; a stop comes back as `verdict` (`liquidatable`, `portfolio_floor`, or a mandate-absent rule).
+Borrower loans only, one per call, gated on the mandate (when set), its floor, and liquidation eligibility; a stop comes back as `verdict` (`liquidatable`, `portfolio_floor`, or a mandate-absent rule).
 
 - Renew: `renew_world_loan { position_id }` → `renewLoan(account, account, position_id)`.
 - Pay dues: `pay_world_loan_interest { position_id, reduce_quantity_raw?, extend_period? }` → `payInterestAndFees`; repay principal or extend only when the user asked.

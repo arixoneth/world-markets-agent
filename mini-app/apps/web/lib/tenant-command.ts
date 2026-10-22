@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { AccountBinding, CommandReply, Tenant } from "@aomi-telegram/core";
+import type { CommandReply, Tenant } from "@aomi-telegram/core";
+import { bindWallet } from "./binding.ts";
 
 const MAX_CLOCK_SKEW_SECONDS = 300;
 
@@ -9,11 +10,8 @@ type CommandRequest = {
   command: string;
   arguments: string;
   args: string[];
-  binding: null | {
-    account_ref: string;
-    chain_id: number;
-    owner_address: string;
-  };
+  /** The Telegram user's agent wallet for this app, named by Aomi. */
+  wallet: null | { evm?: string | null };
   telegram: {
     user_id?: string | null;
     handle?: string | null;
@@ -57,19 +55,6 @@ function parse(body: Uint8Array): CommandRequest | null {
   }
 }
 
-function bindingOf(input: CommandRequest): AccountBinding | null {
-  const binding = input.binding;
-  if (!binding || !input.telegram.user_id) return null;
-  if (!binding.account_ref || !Number.isSafeInteger(binding.chain_id) || !/^0x[0-9a-fA-F]{40}$/.test(binding.owner_address)) return null;
-  return {
-    tenant: "world",
-    telegramUserId: input.telegram.user_id,
-    accountId: binding.account_ref,
-    chainId: binding.chain_id,
-    ownerAddress: binding.owner_address,
-  };
-}
-
 export async function runTenantCommand<A>(request: Request, routeCommand: string, tenant: Tenant<A>): Promise<Response> {
   const raw = new Uint8Array(await request.arrayBuffer());
   if (!authenticate(request, raw)) return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -79,7 +64,9 @@ export async function runTenantCommand<A>(request: Request, routeCommand: string
   const command = tenant.commands.find((candidate) => candidate.name === routeCommand);
   if (!command) return Response.json({ error: "unknown_command" }, { status: 404 });
 
-  const binding = bindingOf(input);
+  const binding = input.telegram.user_id
+    ? await bindWallet(tenant, input.telegram.user_id, input.wallet?.evm)
+    : null;
   const account = binding ? await tenant.adapter.resolveAccount(binding) : null;
   const base = new URL("/mini-app", request.url);
   const miniAppUrl = (view: string, query: Record<string, string> = {}) => {

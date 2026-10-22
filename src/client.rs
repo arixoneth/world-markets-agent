@@ -145,6 +145,9 @@ pub(crate) struct AccountAccess {
     pub(crate) owner: String,
     pub(crate) actor: String,
     pub(crate) authorization: String,
+    /// The owner's mandate for this trader, from World's store.
+    #[serde(skip)]
+    pub(crate) mandate: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -239,15 +242,6 @@ impl WorldClient {
     /// The World chain this client reads. Every hosted call must arrive on it.
     pub(crate) fn chain_id(&self) -> u64 {
         CHAIN_ID
-    }
-
-    /// Same RPC transport and cache, a different exchange contract (the one a
-    /// handover was issued against).
-    pub(crate) fn with_exchange(&self, exchange: Address) -> Self {
-        Self {
-            rpc: self.rpc.clone(),
-            exchange,
-        }
     }
 
     pub(crate) fn rpc_stats(&self) -> rpc::RpcStats {
@@ -762,10 +756,7 @@ impl WorldClient {
             (None, Some(owner), _) => self.account_id_for(owner)?,
             (None, None, Some(actor)) => self.account_id_for(actor)?,
             (None, None, None) => {
-                return Err(
-                    "[world-markets] no World account context is available; provide account_id or bind a handover account reference"
-                        .to_string(),
-                );
+                return Err("[world-markets] no World account context is available".to_string());
             }
         };
         if id == 0 {
@@ -804,7 +795,7 @@ impl WorldClient {
             (owner, "dev_owner_read".to_string())
         } else {
             return Err(
-                "[world-markets] no acting wallet is bound; connect the owner wallet or use an active handover"
+                "[world-markets] no acting wallet is bound; use the agent wallet World's owner allowed to trade"
                     .to_string(),
             );
         };
@@ -814,6 +805,7 @@ impl WorldClient {
             owner: format!("{owner:#x}"),
             actor: format!("{actor:#x}"),
             authorization,
+            mandate: None,
         })
     }
 

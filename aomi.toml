@@ -2,4 +2,11 @@
 name = "world-markets"
 display_name = "World Markets Agent"
 public = true
-handover = "wallet"
+
+# One agent wallet per user, made by Aomi on /start. It trades World from its
+# own address once the account owner allows it (allowTradingForAccount).
+[wallets]
+agent = true
+create = false
+families = ["evm"]
+suggest = "instant"

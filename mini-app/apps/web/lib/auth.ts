@@ -1,4 +1,5 @@
 import { verifyTelegramInitData, type AccountBinding, type Tenant } from "@aomi-telegram/core";
+import { bindWallet } from "./binding.ts";
 import { tenants } from "./server.ts";
 
 export const INIT_DATA_HEADER = "x-telegram-init-data";
@@ -19,16 +20,16 @@ export class AuthError extends Error {
 
 /**
  * Every BFF call carries the Mini App initData. It is verified against
- * Telegram's public key with the tenant's bot id, then the Telegram user is
- * resolved through Aomi’s canonical handover for this bot.
+ * Telegram's public key with the tenant's bot id; Aomi names the Telegram
+ * user's agent wallet for this bot, and World's store names its account.
  */
 export async function authorize<A = unknown>(request: Request, tenantId: string): Promise<Authorized<A>> {
   const tenant = tenants.get(tenantId) as Tenant<A> | undefined;
   if (!tenant || tenantId !== "world") throw new AuthError(404, "unknown tenant");
   const botId = process.env.TELEGRAM_BOT_ID;
   const botUsername = process.env.TELEGRAM_BOT_USERNAME;
-  const bindingUrl = process.env.AOMI_TELEGRAM_BINDING_URL;
-  if (!botId || !botUsername || !bindingUrl) throw new Error("Telegram tenant environment is incomplete");
+  const walletUrl = process.env.AOMI_TELEGRAM_WALLET_URL;
+  if (!botId || !botUsername || !walletUrl) throw new Error("Telegram tenant environment is incomplete");
 
   let telegramUserId: string;
   const devUser = process.env.NODE_ENV !== "production" ? process.env.WEB_DEV_TELEGRAM_USER_ID : undefined;
@@ -41,12 +42,13 @@ export async function authorize<A = unknown>(request: Request, tenantId: string)
     telegramUserId = verified.launch.telegramUserId;
   }
 
-  const binding = await resolveBinding(bindingUrl, tenantId, telegramUserId);
+  const binding = await bindWallet(tenant, telegramUserId, await resolveWallet(walletUrl, telegramUserId));
   const account = binding ? await tenant.adapter.resolveAccount(binding) : null;
   return { tenant, botUsername, telegramUserId, binding, account };
 }
 
-async function resolveBinding(url: string, tenant: string, telegramUserId: string): Promise<AccountBinding | null> {
+/** The Telegram user's agent wallet for this bot, from Aomi. */
+async function resolveWallet(url: string, telegramUserId: string): Promise<string | null> {
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -57,18 +59,11 @@ async function resolveBinding(url: string, tenant: string, telegramUserId: strin
       body: JSON.stringify({ telegram_user_id: telegramUserId }),
     });
     if (!response.ok) throw new Error("lookup failed");
-    const value = await response.json() as { binding?: null | { account_id?: unknown; owner_address?: unknown; chain_id?: unknown; state?: unknown } };
-    const binding = value.binding;
-    if (!binding) return null;
-    if (
-      typeof binding.account_id !== "string" ||
-      typeof binding.owner_address !== "string" ||
-      !/^0x[0-9a-fA-F]{40}$/.test(binding.owner_address) ||
-      typeof binding.chain_id !== "number" ||
-      !Number.isSafeInteger(binding.chain_id) ||
-      (binding.state !== "claimed" && binding.state !== "active")
-    ) throw new Error("invalid lookup response");
-    return { tenant, telegramUserId, accountId: binding.account_id, chainId: binding.chain_id, ownerAddress: binding.owner_address };
+    const value = (await response.json()) as { wallet?: null | { evm?: unknown } };
+    const evm = value.wallet?.evm;
+    if (evm === undefined || evm === null) return null;
+    if (typeof evm !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(evm)) throw new Error("invalid lookup response");
+    return evm;
   } catch {
     throw new Error("Account linking is unavailable. Please try again.");
   }

@@ -267,6 +267,6 @@ fn honest_numbers_law_and_lookups_stated() {
     assert!(trading.contains("`lookups.portfolio_value`"));
     assert!(trading.contains("`lookups.positions`"));
     assert!(trading.contains("`metrics.liquidation_risk`"));
-    assert!(trading.contains("handover.account_ref"));
+    assert!(trading.contains("World's store names the account"));
     assert!(trading.contains("do not preview first"));
 }

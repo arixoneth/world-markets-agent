@@ -87,7 +87,7 @@ When Telegram start-payload routing, the share-card renderer, or the live demo-b
 
 `sidecar/` is a Node process wrapping `@wcm-inc/sdk` (run via `tsx` because `@wcm-inc/abi` ships TypeScript factories). It exposes `/v1/orders`, `/v1/orders/cancel`, `/v1/swaps`, and `/v1/loans/renew`, but its signer only captures prepared calldata and rejects signing methods. The Rust plugin (`src/execution.rs`) is an HTTP client; Aomi's existing stage, simulation, durable Action, and sponsored AA commit path is the sole signing and broadcast boundary.
 
-Local mandate arrives via `WORLD_MANDATE_JSON`, `WORLD_MANDATE_PATH`, or the bundled `mandate.dev.example.json` placeholder because `aomi-run` stubs `handover_mandate`. Set `WORLD_MANDATE_PATH=none` to test the fail-closed handshake. Post-trade RAPV is a pre-trade stand-in.
+Local mandate arrives via `WORLD_MANDATE_JSON`, `WORLD_MANDATE_PATH`, or the bundled `mandate.dev.example.json` placeholder because `aomi-run` has no trader store. Set `WORLD_MANDATE_PATH=none` to test the fail-closed handshake. Post-trade RAPV is a pre-trade stand-in.
 
 ### Future intention
 

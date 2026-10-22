@@ -23,6 +23,7 @@ pub(crate) struct WorldMarketsApp {
     pnl_ledger: PnlLedger,
     loan_origins: crate::loans::LoanOriginStore,
     guardian: GuardianStore,
+    store: crate::store::TraderStore,
 }
 
 pub(crate) struct ListWorldAssets;
@@ -52,7 +53,7 @@ pub(crate) struct GetWorldAccount;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(crate) struct GetWorldAccountArgs {
-    /// World account ID. Optional when handover account context is available.
+    /// World account ID. Ignored when World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Expected owner wallet. This does not replace the acting wallet authorization check.
@@ -67,7 +68,7 @@ pub(crate) struct GetHealthSnapshot;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(crate) struct GetHealthSnapshotArgs {
-    /// World account ID. Optional when handover account context is available.
+    /// World account ID. Ignored when World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Expected owner wallet. This does not replace the acting wallet authorization check.
@@ -104,7 +105,7 @@ pub(crate) struct GetWorldLoans;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(crate) struct GetWorldLoansArgs {
-    /// World account ID. Optional when handover account context is available.
+    /// World account ID. Ignored when World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Expected owner wallet. This does not replace the acting wallet authorization check.
@@ -122,7 +123,7 @@ pub(crate) struct GetWorldOpenOrdersArgs {
     pub(crate) base_symbol: String,
     /// Quote asset symbol.
     pub(crate) quote_symbol: String,
-    /// World account ID. Handover account context is used when omitted.
+    /// World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -162,7 +163,7 @@ pub(crate) struct WorldTradeArgs {
     /// Slippage decimal applied to a market intent, e.g. "0.005" for 0.5%. Default 0.005.
     #[serde(default)]
     pub(crate) slippage: Option<String>,
-    /// Optional World account ID. Handover account context is used when omitted.
+    /// Optional World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -177,7 +178,7 @@ pub(crate) struct GetWorldPnl;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(crate) struct GetWorldPnlArgs {
-    /// World account ID. Handover account context is used when omitted.
+    /// World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -220,7 +221,7 @@ pub(crate) struct CancelWorldOrderArgs {
     /// The resting lend/borrow order's annual rate as a decimal fraction ("0.05"). Required for lend; a lend order is identified by its rate.
     #[serde(default)]
     pub(crate) interest_rate: Option<String>,
-    /// Optional World account ID. Handover account context is used when omitted.
+    /// Optional World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -234,7 +235,7 @@ pub(crate) struct RenewWorldLoan;
 pub(crate) struct RenewWorldLoanArgs {
     /// The borrower loan's `position_id` from `get_world_loans`.
     pub(crate) position_id: String,
-    /// Optional World account ID. Handover account context is used when omitted.
+    /// Optional World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -254,7 +255,7 @@ pub(crate) struct PayWorldLoanInterestArgs {
     /// Extend the term after paying. Only when the user asked to extend.
     #[serde(default)]
     pub(crate) extend_period: Option<bool>,
-    /// Optional World account ID. Handover account context is used when omitted.
+    /// Optional World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -284,7 +285,7 @@ pub(crate) struct PreviewAccountEffectArgs {
     /// The user's whole sentence, so a dollar vs asset size can be classified server-side.
     #[serde(default)]
     pub(crate) text: Option<String>,
-    /// Optional World account ID. Handover account context is used when omitted.
+    /// Optional World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -309,7 +310,7 @@ pub(crate) struct GuardianUnwindArgs {
     /// Holdings the user asked never to touch, by symbol. A veto, never a candidate.
     #[serde(default)]
     pub(crate) protect: Option<Vec<String>>,
-    /// Optional World account ID. Handover account context is used when omitted.
+    /// Optional World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -323,7 +324,7 @@ pub(crate) struct AcknowledgeGuardian;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(crate) struct AcknowledgeGuardianArgs {
-    /// Optional World account ID. Handover account context is used when omitted.
+    /// Optional World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Optional expected owner wallet.
@@ -333,7 +334,7 @@ pub(crate) struct AcknowledgeGuardianArgs {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(crate) struct GetWorldAgentPermissionArgs {
-    /// World account ID. Handover account context is used when omitted.
+    /// World account ID. Ignored: World's store names the wallet's account.
     #[serde(default)]
     pub(crate) account_id: Option<u64>,
     /// Actor address to inspect. The active trading address is used when omitted.
@@ -469,28 +470,8 @@ impl TradePreview {
 }
 
 impl WorldMarketsApp {
-    /// The bound World account: the host's handover account reference, then
-    /// the account the mandate was issued for. A local build may fall back to
-    /// `WORLD_ACCOUNT_ID`; a hosted build never does.
-    fn account_id(ctx: &DynToolCallCtx, explicit: Option<u64>) -> Option<u64> {
-        let from_value = |value: Option<&Value>| {
-            value.and_then(|value| {
-                value.as_u64().or_else(|| {
-                    let raw = value.as_str()?;
-                    raw.parse::<u64>()
-                        .ok()
-                        .or_else(|| raw.strip_prefix("world-")?.parse::<u64>().ok())
-                })
-            })
-        };
-        from_value(ctx.attribute_path(&["handover", "account_ref"]))
-            .or_else(|| from_value(ctx.attribute_path(&["handover", "mandate", "account", "id"])))
-            .or(explicit)
-            .or_else(Self::local_account_id)
-    }
-
-    /// `WORLD_ACCOUNT_ID` for aomi-run, where the runtime stubs every handover
-    /// attribute. Compiled out of a hosted build.
+    /// `WORLD_ACCOUNT_ID` for aomi-run, which has no trader store: it scopes
+    /// local lookups to one account. Compiled out of a hosted build.
     #[cfg(feature = "local-dev")]
     fn local_account_id() -> Option<u64> {
         let raw = std::env::var("WORLD_ACCOUNT_ID").ok()?;
@@ -504,12 +485,9 @@ impl WorldMarketsApp {
         None
     }
 
-    /// The client for this call: the host's chain must be the World chain,
-    /// and a handover may pin the exchange address it was issued against.
+    /// The client for this call: the wallet's chain must be the World chain.
     fn client_for(&self, ctx: &DynToolCallCtx) -> Result<WorldClient, String> {
-        if let Some(chain_id) = ctx
-            .attribute_u64(&["handover", "chain_id"])
-            .or_else(|| ctx.attribute_u64(&["domain", "evm", "chain_id"]))
+        if let Some(chain_id) = ctx.attribute_u64(&["domain", "evm", "chain_id"])
             && chain_id != self.client.chain_id()
         {
             return Err(format!(
@@ -517,17 +495,13 @@ impl WorldMarketsApp {
                 self.client.chain_id()
             ));
         }
-        match ctx.attribute_string(&["handover", "context", "world", "exchange"]) {
-            Some(raw) => {
-                let exchange = Address::from_str(raw.trim()).map_err(|e| {
-                    format!("[world-markets] invalid handover exchange address: {e}")
-                })?;
-                Ok(self.client.with_exchange(exchange))
-            }
-            None => Ok(self.client.clone()),
-        }
+        Ok(self.client.clone())
     }
 
+    /// The trader is the agent wallet itself (its own address, upgraded in
+    /// place); World's store names the account its owner allowed it to
+    /// trade, and the chain confirms the grant on every call, so a revoke
+    /// blocks the next one. Without a record the reply is the authorize link.
     fn access(
         &self,
         client: &WorldClient,
@@ -535,30 +509,50 @@ impl WorldMarketsApp {
         wallet_address: Option<&str>,
         ctx: &DynToolCallCtx,
     ) -> Result<AccountAccess, String> {
-        let account_id = Self::account_id(ctx, account_id);
-        // A settled handover is authenticated state. Model arguments are lookup
-        // hints only when no such binding exists; they never replace the owner
-        // with the managed signer or another user's wallet.
-        let owner_wallet = ctx
-            .attribute_string(&["handover", "owner_address"])
-            .or_else(|| wallet_address.map(ToString::to_string));
-        // World grants the OperatingAccount because that is the address which
-        // calls the venue under AA. The managed signer in domain.evm is only the
-        // OperatingAccount owner/signature authority and must never be treated
-        // as the venue trader, so a handover without its operating address
-        // fails closed instead of falling back to the signer.
-        let actor = if ctx.attribute_path(&["handover"]).is_some() {
-            Some(
-                ctx.attribute_string(&["handover", "operating_address"])
-                    .ok_or_else(|| {
-                        "[world-markets] active handover is missing its OperatingAccount address"
-                            .to_string()
-                    })?,
-            )
-        } else {
-            ctx.attribute_string(&["domain", "evm", "address"])
+        let Some(trader) = ctx.attribute_string(&["domain", "evm", "address"]) else {
+            // aomi-run without a wallet: WORLD_ACCOUNT_ID scopes read-only lookups.
+            return client.resolve_account(
+                Self::local_account_id().or(account_id),
+                wallet_address,
+                None,
+            );
         };
-        client.resolve_account(account_id, owner_wallet.as_deref(), actor.as_deref())
+        let record = match Self::local_account_id() {
+            Some(account_id) => crate::store::TraderRecord {
+                account_id,
+                mandate: None,
+            },
+            None => self
+                .store
+                .trader(ctx, &trader, client.chain_id())?
+                .ok_or_else(|| Self::not_authorized(&trader))?,
+        };
+        let mut access = client.resolve_account(Some(record.account_id), None, Some(&trader))?;
+        access.mandate = record.mandate;
+        Ok(access)
+    }
+
+    /// The owner's mandate for this wallet, read from the store alone (no
+    /// chain read): what a floor or resize reply cites.
+    fn stored_mandate(&self, ctx: &DynToolCallCtx) -> Result<Option<Value>, String> {
+        let Some(trader) = ctx.attribute_string(&["domain", "evm", "address"]) else {
+            return Ok(None);
+        };
+        Ok(self
+            .store
+            .trader(ctx, &trader, self.client.chain_id())?
+            .and_then(|record| record.mandate))
+    }
+
+    /// This wallet may not trade a World account yet: the owner allows it
+    /// once, on World's site.
+    fn not_authorized(trader: &str) -> String {
+        match crate::store::authorize_link(trader) {
+            Ok(link) => format!(
+                "[world-markets] this wallet ({trader}) isn't allowed to trade a World account yet. The account owner allows it once at {link} [err.type=world_trader_not_authorized]"
+            ),
+            Err(error) => error,
+        }
     }
 
     fn live_account(
@@ -612,8 +606,9 @@ impl WorldMarketsApp {
             "guardian": {
                 "hold": self.guardian.status(access.account_id)?,
             },
-            "mandate": Mandate::bound(ctx.attribute_path(&["handover", "mandate"]))
+            "mandate": Mandate::optional(access.mandate.as_ref())
                 .ok()
+                .flatten()
                 .and_then(|mandate| {
                     let quote = mandate.min_risk_adjusted_portfolio_value.quote.clone();
                     mandate.floor(&quote).ok().map(|floor| {
@@ -812,8 +807,9 @@ impl WorldMarketsApp {
         )
         .ok()
         .map(|projection| projection.rapv);
-        let verdict = match Mandate::bound(ctx.attribute_path(&["handover", "mandate"])) {
-            Ok(mandate) => mandate.evaluate(&TradeFacts {
+        let verdict = match Mandate::optional(access.mandate.as_ref()) {
+            Ok(None) => Verdict::unbounded(),
+            Ok(Some(mandate)) => mandate.evaluate(&TradeFacts {
                 product,
                 side: &side,
                 base: &base.symbol,
@@ -952,7 +948,7 @@ impl WorldMarketsApp {
             "operation": "cancel_order",
             "executable": false,
         });
-        if let Err(verdict) = Mandate::bound(ctx.attribute_path(&["handover", "mandate"])) {
+        if let Err(verdict) = Mandate::optional(access.mandate.as_ref()) {
             return Ok(Err(Self::with_verdict(base_value, &verdict)));
         }
         let assets = client.assets()?;
@@ -1089,12 +1085,15 @@ impl WorldMarketsApp {
             "operation": operation,
             "executable": false,
         });
-        let mandate = match Mandate::bound(ctx.attribute_path(&["handover", "mandate"])) {
+        let mandate = match Mandate::optional(access.mandate.as_ref()) {
             Ok(mandate) => mandate,
             Err(verdict) => return Ok(Err(Self::with_verdict(value, &verdict))),
         };
         let (assets, account) = Self::live_account(&client, &access)?;
-        if account.eligible_for_liquidation && mandate.halt_if_eligible_for_liquidation {
+        if let Some(mandate) = &mandate
+            && account.eligible_for_liquidation
+            && mandate.halt_if_eligible_for_liquidation
+        {
             return Ok(Err(Self::with_verdict(
                 value,
                 &Verdict {
@@ -1109,9 +1108,16 @@ impl WorldMarketsApp {
             "risk_adjusted_portfolio_value",
         )
         .map_err(|verdict| format!("[world-markets] {}: {}", verdict.rule, verdict.detail))?;
-        let floor = parse_decimal(&mandate.min_risk_adjusted_portfolio_value.amount, "floor")
+        let floor = mandate
+            .as_ref()
+            .map(|mandate| {
+                parse_decimal(&mandate.min_risk_adjusted_portfolio_value.amount, "floor")
+            })
+            .transpose()
             .map_err(|verdict| format!("[world-markets] {}: {}", verdict.rule, verdict.detail))?;
-        if rapv < floor {
+        if let Some(floor) = floor
+            && rapv < floor
+        {
             return Ok(Err(Self::with_verdict(
                 value,
                 &Verdict {
@@ -1537,8 +1543,8 @@ impl DynAomiTool for ComputeResize {
     const NAME: &'static str = "compute_resize";
     const DESCRIPTION: &'static str = "For a blocked intent, return the user's RAPV floor from the signed mandate. A block cites exactly one number: the floor. Never executes.";
 
-    fn run(_app: &WorldMarketsApp, args: Self::Args, ctx: DynToolCallCtx) -> Result<Value, String> {
-        let resize = Mandate::bound(ctx.attribute_path(&["handover", "mandate"]))
+    fn run(app: &WorldMarketsApp, args: Self::Args, ctx: DynToolCallCtx) -> Result<Value, String> {
+        let resize = Mandate::bound(app.stored_mandate(&ctx)?.as_ref())
             .and_then(|mandate| mandate.floor_solution(&args.rule))
             .map_err(|verdict| format!("[world-markets] {}: {}", verdict.rule, verdict.detail))?;
         Ok(json!({
@@ -1762,7 +1768,7 @@ impl DynAomiTool for GuardianUnwind {
             "mode": if execute { "execute" } else { "drill" },
             "executable": false,
         });
-        let mandate = match Mandate::bound(ctx.attribute_path(&["handover", "mandate"])) {
+        let mandate = match Mandate::bound(access.mandate.as_ref()) {
             Ok(mandate) => mandate,
             Err(verdict) => {
                 return Ok(ToolReturn::value(WorldMarketsApp::with_verdict(
@@ -1940,17 +1946,29 @@ impl DynAomiTool for GetWorldAgentPermission {
 
     fn run(app: &WorldMarketsApp, args: Self::Args, ctx: DynToolCallCtx) -> Result<Value, String> {
         let client = app.client_for(&ctx)?;
-        let account_id = WorldMarketsApp::account_id(&ctx, args.account_id).ok_or_else(|| {
-            "[world-markets] no World account id is available for the permission check".to_string()
-        })?;
         let actor = args
             .actor_address
-            .or_else(|| ctx.attribute_string(&["handover", "operating_address"]))
             .or_else(|| ctx.attribute_string(&["domain", "evm", "address"]))
             .ok_or_else(|| {
                 "[world-markets] no trading address is available for the permission check"
                     .to_string()
             })?;
+        // No store record: not allowed yet, and the answer is where to allow it.
+        let account_id = match WorldMarketsApp::local_account_id().or(args.account_id) {
+            Some(id) => id,
+            None => match app.store.trader(&ctx, &actor, client.chain_id())? {
+                Some(record) => record.account_id,
+                None => {
+                    return Ok(json!({
+                        "source": "world-markets-store",
+                        "chain_id": client.chain_id(),
+                        "permission": { "actor": actor, "authorized": false, "authorization": "none" },
+                        "authorize_url": crate::store::authorize_link(&actor)?,
+                        "executable": false,
+                    }));
+                }
+            },
+        };
         Ok(json!({
             "source": "world-markets-contract",
             "chain_id": client.chain_id(),
@@ -1992,8 +2010,9 @@ mod tests {
         mandate
     }
 
-    #[test]
-    fn handover_identity_overrides_model_wallet_and_account_arguments() {
+    /// A venue whose account 21 is owned by 0x1111… and, while `granted`,
+    /// lets 0x2222… trade it.
+    fn venue(granted: bool) -> WorldClient {
         use std::sync::{
             Arc,
             atomic::{AtomicUsize, Ordering},
@@ -2020,22 +2039,49 @@ mod tests {
                 Ok(json!({"jsonrpc":"2.0", "id":body["id"], "result":result}))
             }
         }
-        let client = WorldClient::with_rpc(crate::rpc::RpcTransport::with_executor(Arc::new(
-            Venue(AtomicUsize::new(0), true),
-        )));
-        let app = WorldMarketsApp::default();
-        let ctx = ctx_with(json!({
-            "domain": { "evm": { "address": "0x3333333333333333333333333333333333333333", "chain_id": 1 } },
-            "handover": {
-                "account_ref": "21", "chain_id": 2092151908u64,
-                "owner_address": "0x1111111111111111111111111111111111111111",
-                "operating_address": "0x2222222222222222222222222222222222222222"
-            }
-        }));
+        WorldClient::with_rpc(crate::rpc::RpcTransport::with_executor(Arc::new(Venue(
+            AtomicUsize::new(0),
+            granted,
+        ))))
+    }
+
+    const TRADER: &str = "0x2222222222222222222222222222222222222222";
+
+    fn app_with_store(records: Vec<(&str, u64, Option<Value>)>) -> WorldMarketsApp {
+        WorldMarketsApp {
+            store: crate::store::TraderStore::Fixed(std::sync::Arc::new(
+                records
+                    .into_iter()
+                    .map(|(trader, account_id, mandate)| {
+                        (
+                            trader.to_string(),
+                            crate::store::TraderRecord {
+                                account_id,
+                                mandate,
+                            },
+                        )
+                    })
+                    .collect(),
+            )),
+            ..WorldMarketsApp::default()
+        }
+    }
+
+    fn trader_ctx() -> DynToolCallCtx {
+        ctx_with(json!({ "domain": { "evm": { "address": TRADER, "chain_id": 2092151908u64 } } }))
+    }
+
+    /// T7: the agent wallet itself is the trader; World's store names its
+    /// account (model arguments never override it), the chain confirms the
+    /// grant on every call, and a revoke blocks the next one.
+    #[test]
+    fn the_wallet_trades_the_account_the_store_names_until_revoked() {
+        let app = app_with_store(vec![(TRADER, 21, Some(mandate_json(None)))]);
+        let ctx = trader_ctx();
         assert!(app.client_for(&ctx).is_ok());
         let access = app
             .access(
-                &client,
+                &venue(true),
                 Some(99),
                 Some("0x3333333333333333333333333333333333333333"),
                 &ctx,
@@ -2043,79 +2089,35 @@ mod tests {
             .unwrap();
         assert_eq!(access.account_id, 21);
         assert_eq!(access.owner, "0x1111111111111111111111111111111111111111");
-        assert_eq!(access.actor, "0x2222222222222222222222222222222222222222");
+        assert_eq!(access.actor, TRADER);
         assert_eq!(access.authorization, "delegated_trader");
-        let revoked = WorldClient::with_rpc(crate::rpc::RpcTransport::with_executor(Arc::new(
-            Venue(AtomicUsize::new(0), false),
-        )));
-        let error = app.access(&revoked, None, None, &ctx).unwrap_err();
+        assert!(access.mandate.is_some());
+        let error = app.access(&venue(false), None, None, &ctx).unwrap_err();
         assert!(error.contains("neither the owner"), "{error}");
     }
 
+    /// No store record: nothing trades, and the reply is where the owner
+    /// allows this wallet.
     #[test]
-    fn account_id_prefers_handover_account_ref_then_mandate_account() {
-        let both = ctx_with(json!({
-            "handover": { "account_ref": "world-1234", "mandate": mandate_json(Some(99)) }
-        }));
-        assert_eq!(WorldMarketsApp::account_id(&both, None), Some(1234));
-        assert_eq!(WorldMarketsApp::account_id(&both, Some(7)), Some(1234));
-        assert_eq!(
-            WorldMarketsApp::account_id(&ctx_with(json!({})), Some(7)),
-            Some(7)
+    fn an_unauthorized_wallet_gets_the_authorize_link() {
+        unsafe { std::env::set_var("WORLD_AUTHORIZE_URL", "https://world.example/authorize") };
+        let app = app_with_store(Vec::new());
+        let error = app
+            .access(&WorldClient::default(), None, None, &trader_ctx())
+            .unwrap_err();
+        assert!(
+            error.contains(&format!("https://world.example/authorize?trader={TRADER}")),
+            "{error}"
         );
-
-        let numeric = ctx_with(json!({ "handover": { "account_ref": 55 } }));
-        assert_eq!(WorldMarketsApp::account_id(&numeric, None), Some(55));
-
-        let mandate_only = ctx_with(json!({ "handover": { "mandate": mandate_json(Some(99)) } }));
-        assert_eq!(WorldMarketsApp::account_id(&mandate_only, None), Some(99));
-
-        let foreign = ctx_with(json!({ "handover": { "account_ref": "other-55" } }));
-        assert_eq!(WorldMarketsApp::account_id(&foreign, None), None);
-
-        // Attribute names the host never publishes must not resolve.
-        let legacy = ctx_with(json!({
-            "world": { "account_id": 1 },
-            "handover_account_id": 2,
-            "platform_account_ref": 3,
-            "telegram": { "user_id": 4 },
-        }));
-        assert_eq!(WorldMarketsApp::account_id(&legacy, None), None);
-    }
-
-    #[cfg(not(feature = "local-dev"))]
-    #[test]
-    fn hosted_build_ignores_world_account_id_env() {
-        unsafe { std::env::set_var("WORLD_ACCOUNT_ID", "world-777") };
-        assert_eq!(
-            WorldMarketsApp::account_id(&ctx_with(json!({})), None),
-            None
-        );
-        unsafe { std::env::remove_var("WORLD_ACCOUNT_ID") };
+        assert!(error.contains("world_trader_not_authorized"), "{error}");
     }
 
     #[test]
-    fn client_for_rejects_a_foreign_chain_and_pins_the_handover_exchange() {
+    fn client_for_rejects_a_foreign_chain() {
         let app = WorldMarketsApp::default();
         let foreign = ctx_with(json!({ "domain": { "evm": { "chain_id": 1 } } }));
         assert!(app.client_for(&foreign).is_err());
-
-        let pinned = ctx_with(json!({
-            "domain": { "evm": { "chain_id": 2092151908u64 } },
-            "handover": { "context": { "world": {
-                "exchange": "0x1111111111111111111111111111111111111111"
-            } } }
-        }));
-        let client = app.client_for(&pinned).unwrap();
-        assert_eq!(
-            client.exchange(),
-            "0x1111111111111111111111111111111111111111"
-        );
-        assert_eq!(client.chain_id(), 2092151908);
-
-        let bad =
-            ctx_with(json!({ "handover": { "context": { "world": { "exchange": "nope" } } } }));
-        assert!(app.client_for(&bad).is_err());
+        assert!(app.client_for(&trader_ctx()).is_ok());
     }
 
     #[test]
@@ -2162,6 +2164,8 @@ mod tests {
                 owner: "0x4444444444444444444444444444444444444444".to_string(),
                 actor: "0x5555555555555555555555555555555555555555".to_string(),
                 authorization: "delegated_trader".to_string(),
+
+                mandate: None,
             },
             product: "spot",
             side: "sell".to_string(),
@@ -2265,13 +2269,13 @@ mod tests {
 
     #[test]
     fn compute_resize_carries_floor_and_rule() {
-        let app = WorldMarketsApp::default();
+        let app = app_with_store(vec![(TRADER, 21, Some(mandate_json(None)))]);
         let value = ComputeResize::run(
             &app,
             ComputeResizeArgs {
                 rule: "portfolio_floor".to_string(),
             },
-            ctx_with(json!({ "handover": { "mandate": mandate_json(None) } })),
+            trader_ctx(),
         )
         .unwrap();
         assert_eq!(value["resize"]["rule"], "portfolio_floor");
@@ -2287,21 +2291,6 @@ mod tests {
         )
         .unwrap_err();
         assert!(missing.contains("missing_mandate"), "{missing}");
-    }
-
-    #[test]
-    fn handover_without_operating_address_fails_closed() {
-        let app = WorldMarketsApp::default();
-        let client = WorldClient::default();
-        let ctx = ctx_with(json!({
-            "domain": { "evm": { "address": "0x3333333333333333333333333333333333333333" } },
-            "handover": {
-                "account_ref": "21",
-                "owner_address": "0x1111111111111111111111111111111111111111"
-            }
-        }));
-        let error = app.access(&client, None, None, &ctx).unwrap_err();
-        assert!(error.contains("OperatingAccount"), "{error}");
     }
 
     #[test]
@@ -2384,6 +2373,8 @@ mod tests {
                 owner: "0x4444444444444444444444444444444444444444".to_string(),
                 actor: "0x5555555555555555555555555555555555555555".to_string(),
                 authorization: "delegated_trader".to_string(),
+
+                mandate: None,
             },
             product: "spot",
             side: "sell".to_string(),
