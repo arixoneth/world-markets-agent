@@ -15,7 +15,7 @@ local-dev = []
 [dependencies]
 alloy-primitives = "=0.8.25"
 alloy-sol-types = "=0.8.25"
-aomi-sdk = "=5.1.1"
+aomi-sdk = "=6.0.0"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 rust_decimal = "1.37"
 schemars = "1.0.4"
